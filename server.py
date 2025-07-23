@@ -202,6 +202,234 @@ def delete_comment(version, project_id, topic_id, comment_id):
 
     return jsonify({"msg": f"Comment {comment_id} deleted"}), 200
 
+# GET Comments
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/comments", methods=["GET"])
+@require_auth
+def get_comments(version, project_id, topic_id):
+    session = Session()
+    comments = session.query(Comment).filter_by(topic_id=topic_id).all()
+    result = []
+    for c in comments:
+        result.append({
+            "id": c.id,
+            "author": c.author,
+            "comment": c.comment
+        })
+    session.close()
+    return jsonify(result), 200
+
+@app.route("/Projects/<project_id>/projectExtensionsCustom", methods=["GET"])
+@require_auth
+def get_extensions(project_id):
+    """
+    GET /Projects/<project_id>/projectExtensionsCustom
+    For now, returns a mock object — replace with real logic.
+    """
+    # TODO: Replace this with real extensions data from your DB if you have it.
+    extensions = {
+        "projectId": project_id,
+        "customField1": "Example value",
+        "customField2": True,
+        "customField3": ["OptionA", "OptionB"]
+    }
+    return jsonify(extensions), 200
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/related_topics", methods=["GET"])
+@require_auth
+def get_related_topics(version, project_id, topic_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/topics/<topic_id>/related_topics
+    For now, returns mock related topics — add real logic later.
+    """
+    session = Session()
+    # For now: Just return 2 other topics from the same project (example logic)
+    related = session.query(Topic).filter(
+        Topic.project_id == project_id,
+        Topic.id != topic_id
+    ).limit(2).all()
+
+    result = []
+    for t in related:
+        result.append({
+            "id": t.id,
+            "title": t.title,
+            "status": t.status
+        })
+
+    session.close()
+    return jsonify(result), 200
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints", methods=["GET"])
+@require_auth
+def get_viewpoints(version, project_id, topic_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints
+    For now, returns a mock list — wire to DB or file later.
+    """
+    # Example dummy data — adjust as needed
+    viewpoints = [
+        {
+            "id": "vp-123",
+            "name": "Main View",
+            "snapshot_url": "/some/path/to/snapshot.jpg"
+        },
+        {
+            "id": "vp-456",
+            "name": "Side View",
+            "snapshot_url": "/some/path/to/snapshot2.jpg"
+        }
+    ]
+    return jsonify(viewpoints), 200
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints", methods=["POST"])
+@require_auth
+def post_viewpoint(version, project_id, topic_id):
+    """
+    POST /bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints
+    Accepts a viewpoint payload, returns a dummy ID.
+    """
+    data = request.get_json()
+
+    # TODO: Save to DB later if needed
+    new_viewpoint_id = str(uuid.uuid4())
+
+    response = {
+        "msg": "Viewpoint created",
+        "id": new_viewpoint_id,
+        "name": data.get("name", "Unnamed Viewpoint")
+    }
+
+    return jsonify(response), 201
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints/<viewpoint_id>/selection", methods=["GET"])
+@require_auth
+def get_selection(version, project_id, topic_id, viewpoint_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints/<viewpoint_id>/selection
+    Returns mock selection data for now.
+    """
+    selection = {
+        "viewpoint_id": viewpoint_id,
+        "selected_components": [
+            {"guid": "element-1"},
+            {"guid": "element-2"}
+        ]
+    }
+    return jsonify(selection), 200
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints/<viewpoint_id>/visibility", methods=["GET"])
+@require_auth
+def get_visibility(version, project_id, topic_id, viewpoint_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints/<viewpoint_id>/visibility
+    Returns mock visibility data.
+    """
+    visibility = {
+        "viewpoint_id": viewpoint_id,
+        "default_visibility": True,
+        "exceptions": [
+            {"guid": "element-1", "visible": False},
+            {"guid": "element-2", "visible": True}
+        ]
+    }
+    return jsonify(visibility), 200
+
+import base64
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints/<viewpoint_id>/snapshot", methods=["GET"])
+@require_auth
+def get_snapshot(version, project_id, topic_id, viewpoint_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/topics/<topic_id>/viewpoints/<viewpoint_id>/snapshot
+    Returns a mock base64 snapshot string.
+    """
+    # Example: Just use a simple text as fake image
+    fake_image_bytes = b"FakeImageContent"
+    fake_image_b64 = base64.b64encode(fake_image_bytes).decode("utf-8")
+
+    snapshot = {
+        "viewpoint_id": viewpoint_id,
+        "snapshot": fake_image_b64
+    }
+
+    return jsonify(snapshot), 200
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/document_references", methods=["GET"])
+@require_auth
+def get_document_references(version, project_id, topic_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/topics/<topic_id>/document_references
+    Returns mock document references for now.
+    """
+    references = [
+        {"doc_id": "doc-123", "name": "Specs.pdf"},
+        {"doc_id": "doc-456", "name": "Detail.png"}
+    ]
+    return jsonify(references), 200
+
+@app.route("/bcf/<version>/projects/<project_id>/topics/<topic_id>/document_references", methods=["POST"])
+@require_auth
+def post_document_reference(version, project_id, topic_id):
+    """
+    POST /bcf/<version>/projects/<project_id>/topics/<topic_id>/document_references
+    Accepts a doc ID payload and stores the reference — mock only for now.
+    """
+    data = request.get_json()
+    doc_id = data.get("doc_id")
+
+    if not doc_id:
+        return jsonify({"msg": "Missing doc_id"}), 400
+
+    # TODO: Save to DB if you track doc references
+
+    response = {
+        "msg": f"Document reference {doc_id} added to topic {topic_id}"
+    }
+
+    return jsonify(response), 201
+
+@app.route("/bcf/<version>/projects/<project_id>/documents/<doc_id>", methods=["GET"])
+@require_auth
+def get_document(version, project_id, doc_id):
+    """
+    GET /bcf/<version>/projects/<project_id>/documents/<doc_id>
+    Returns mock document info — replace with real file serving later.
+    """
+    document = {
+        "doc_id": doc_id,
+        "name": "example.pdf",
+        "size": "1.2MB",
+        "url": f"/files/{doc_id}"
+    }
+    return jsonify(document), 200
+
+from flask import send_file  # You may already have this
+
+@app.route("/bcf/<version>/projects/<project_id>/documents", methods=["POST"])
+@require_auth
+def post_document(version, project_id):
+    """
+    POST /bcf/<version>/projects/<project_id>/documents
+    Accepts a file upload and stores it — mock only for now.
+    """
+    if 'file' not in request.files:
+        return jsonify({"msg": "No file part in request"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"msg": "No selected file"}), 400
+
+    # For now, don’t actually save — just fake an ID.
+    new_doc_id = str(uuid.uuid4())
+    filename = file.filename
+
+    response = {
+        "msg": "Document uploaded",
+        "doc_id": new_doc_id,
+        "filename": filename
+    }
+
+    return jsonify(response), 201
 
 
 if __name__ == "__main__":
