@@ -144,7 +144,6 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 # GET Viewpoint Visibility
 curl -H "Authorization: Bearer $TOKEN" \
-  curl -H "Authorization: Bearer $TOKEN" \
   http://91.99.113.101/bcf/3.0/projects/<PROJECT_ID>/topics/<TOPIC_GUID>/viewpoints/<guid>/visibiity
 
 // curl -H "Authorization: Bearer $TOKEN" \
@@ -183,8 +182,7 @@ curl -X POST   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application
 curl -X POST   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{                                                                                     
     "url": "http://example.com/files/LegalRequirements.pdf",
     "description": "The legal requirements for buildings."
-  }'   "http://91.99.113.101/bcf/3.0/projects/F445F4F2-4D02-4B2A-B612-5E456BEF9137/topics/04C57D6B-22B9-4AAC-9F11-F69E50441F15/document_
-references"
+  }'   "http://91.99.113.101/bcf/3.0/projects/F445F4F2-4D02-4B2A-B612-5E456BEF9137/topics/04C57D6B-22B9-4AAC-9F11-F69E50441F15/document_references"
 
 # GET Document list
 curl -H "Authorization: Bearer $TOKEN" \
