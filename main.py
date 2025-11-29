@@ -94,8 +94,9 @@ print("✅ All topics and comments inserted.")
 session.close()
 """
 
-from bcf.bcfxml import load
-from sqlalchemy import create_engine, Column, String, DateTime, ForeignKey
+#from bcf.bcfxml import load
+
+from sqlalchemy import create_engine, Column, String, DateTime, ForeignKey, JSON, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 import uuid
@@ -105,26 +106,273 @@ from sqlalchemy.dialects.postgresql import insert
 # --- SQLAlchemy Models (keep outside the main class) ---
 Base = declarative_base()
 
+class Project(Base):
+    __tablename__ = 'projects'
+    id = Column(String, primary_key=True)  # projectId
+    name = Column(String)
+    created_at = Column(DateTime)
+
+    topics = relationship("Topic", backref="project")
+    project_actions = Column(JSON, nullable=False, default=list)
+    topic_types = relationship("ProjectTopicType", backref="project")
+    topic_statuses = relationship("ProjectTopicStatus", backref="project")
+    topic_labels = relationship("ProjectTopicLabel", backref="project")
+    snippet_types = relationship("ProjectSnippetType", backref="project")
+    priorities = relationship("ProjectPriority", backref="project")
+    users = relationship("ProjectUser", backref="project")
+    stages = relationship("ProjectStage", backref="project")
+    project_actions_rel = relationship("ProjectProjectAction", backref="project")
+    topic_actions = relationship("ProjectTopicAction", backref="project")
+    comment_actions = relationship("ProjectCommentAction", backref="project")
+    #extensions = Column(JSON, nullable=True)
+
+    def to_bcf_dict(self, actions=None):
+        return {
+            "project_id": str(self.id),
+            "name": self.name,
+            "authorization": {
+                "project_actions": self.project_actions or []
+            }
+        }
+
+
 class Topic(Base):
     __tablename__ = 'topics'
-    id = Column(String, primary_key=True)
-    project_id = Column(String)
-    title = Column(String)
-    status = Column(String)
-    creation_author = Column(String)
-    creation_date = Column(DateTime)
+    guid = Column(String, primary_key=True)  # topic guid
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+
+    # core BCF fields
+    server_assigned_id = Column(String, nullable=True)
+    creation_author = Column(String, nullable=True)
+    creation_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    topic_type = Column(String, nullable=True)
+    topic_status = Column(String, nullable=True)
+    title = Column(String, nullable=False)
+    priority = Column(String, nullable=True)
+    assigned_to = Column(String, nullable=True)
+
+    # JSON fields
+    labels = Column(JSON, nullable=False, default=list)       # array of strings
+    bim_snippet = Column(JSON, nullable=True)                 # arbitrary JSON
     modified_author = Column(String)
     modified_date = Column(DateTime)
     comments = relationship("Comment", back_populates="topic")
+    viewpoints = relationship("Viewpoint", back_populates="topic")
+
+    def to_bcf_dict(self):
+        return {
+            "guid": self.guid,
+            "server_assigned_id": self.server_assigned_id,
+            "creation_author": self.creation_author,
+            "creation_date": self.creation_date.isoformat() + "Z" if self.creation_date else None,
+            "topic_type": self.topic_type,
+            "topic_status": self.topic_status,
+            "title": self.title,
+            "priority": self.priority,
+            "labels": self.labels or [],
+            "assigned_to": self.assigned_to,
+            "bim_snippet": self.bim_snippet,
+            "modified_author": self.modified_author,
+            "modified_date": self.modified_date.isoformat() + "Z" if self.modified_date else None,
+            #"comments": [c.to_bcf_dict() for c in self.comments]
+        }
+
 
 class Comment(Base):
-    __tablename__ = 'comments'
-    id = Column(String, primary_key=True)
-    topic_id = Column(String, ForeignKey('topics.id'))
-    author = Column(String)
-    date = Column(DateTime)
-    comment = Column(String)
+    __tablename__ = "comments"
+
+    guid = Column(String, primary_key=True)  # BCF comment GUID
+    topic_guid = Column(
+        String,
+        ForeignKey("topics.guid"),
+        nullable=False
+    )
+
+    date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    author = Column(String, nullable=False)
+    comment = Column(String, nullable=False)
+
+    # NEW:
+    modified_author = Column(String, nullable=True)
+    modified_date = Column(DateTime, nullable=True)
+
     topic = relationship("Topic", back_populates="comments")
+
+    def to_bcf_dict(self):
+        return {
+            "guid": self.guid,
+            "date": self.date.isoformat() + "Z" if self.date else None,
+            "author": self.author,
+            "modified_date": self.modified_date.isoformat() + "Z"
+            if self.modified_date
+            else None,
+            "modified_author": self.modified_author,
+            "comment": self.comment,
+            "topic_guid": self.topic_guid,
+        }
+
+class Viewpoint(Base):
+    __tablename__ = "viewpoints"
+
+    guid = Column(String, primary_key=True)            # BCF GUID for viewpoint
+    topic_guid = Column(String, ForeignKey("topics.guid"), nullable=False)
+    index = Column(Integer, nullable=True)
+
+    perspective_camera = Column(JSON, nullable=True)
+    lines = Column(JSON, nullable=True)
+    clipping_planes = Column(JSON, nullable=True)
+
+    # snapshot metadata (store type); snapshot_data (base64) optionally saved in DB in bitmaps table or omitted
+    snapshot = Column(JSON, nullable=True)   # e.g. {"snapshot_type": "png"}
+
+    # components (selection/coloring/visibility) stored as JSON
+    components = Column(JSON, nullable=True)
+
+    # relationship
+    topic = relationship("Topic", back_populates="viewpoints")
+    bitmaps = relationship("Bitmap", back_populates="viewpoint", cascade="all, delete-orphan")
+
+    def to_bcf_dict(self):
+        # bitmaps in response should include guid and meta (no bitmap_data)
+        bm_list = []
+        for b in (self.bitmaps or []):
+            bm_list.append({
+                "guid": b.guid,
+                "bitmap_type": b.bitmap_type,
+                "location": b.location or None,
+                "normal": b.normal or None,
+                "up": b.up or None,
+                "height": b.height
+            })
+
+        return {
+            "guid": self.guid,
+            "index": self.index,
+            "perspective_camera": self.perspective_camera,
+            "lines": self.lines or [],
+            "clipping_planes": self.clipping_planes or [],
+            "bitmaps": bm_list,
+            "snapshot": {"snapshot_type": (self.snapshot or {}).get("snapshot_type")} if self.snapshot else None,
+            # components intentionally omitted from response in example, but we can include if needed
+        }
+
+
+class Bitmap(Base):
+    __tablename__ = "bitmaps"
+
+    guid = Column(String, primary_key=True)
+    viewpoint_guid = Column(String, ForeignKey("viewpoints.guid"), nullable=False)
+
+    bitmap_type = Column(String, nullable=True)
+    # store base64 data as TEXT (simple). For large data consider bytea or external storage.
+    bitmap_data = Column(Text, nullable=True)
+
+    # meta as JSON for location/normal/up
+    location = Column(JSON, nullable=True)
+    normal = Column(JSON, nullable=True)
+    up = Column(JSON, nullable=True)
+    height = Column(Integer, nullable=True)
+
+    viewpoint = relationship("Viewpoint", back_populates="bitmaps")
+
+class DocumentReference(Base):
+    __tablename__ = 'document_references'
+
+    guid = Column(String, primary_key=True)
+    topic_guid = Column(String, ForeignKey('topics.guid'))
+    url = Column(String)
+    document_guid = Column(String)
+    description = Column(String)
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    guid = Column(String, primary_key=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    filename = Column(String, nullable=False)      # e.g. "LegalRequirements.pdf"
+    path = Column(String, nullable=False)          # filesystem path in container/host
+    description = Column(String, nullable=True)    # optional
+
+    def to_bcf_dict(self):
+        return {
+            "guid": self.guid,
+            "filename": self.filename,
+        }
+
+from sqlalchemy import Integer
+
+class ProjectTopicType(Base):
+    __tablename__ = "project_topic_types"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectTopicStatus(Base):
+    __tablename__ = "project_topic_statuses"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectTopicLabel(Base):
+    __tablename__ = "project_topic_labels"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectSnippetType(Base):
+    __tablename__ = "project_snippet_types"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectPriority(Base):
+    __tablename__ = "project_priorities"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectUser(Base):
+    __tablename__ = "project_users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectStage(Base):
+    __tablename__ = "project_stages"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectProjectAction(Base):
+    __tablename__ = "project_project_actions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectTopicAction(Base):
+    __tablename__ = "project_topic_actions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+
+class ProjectCommentAction(Base):
+    __tablename__ = "project_comment_actions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    value = Column(String, nullable=False)
+
+'''# --- Database Connection Setup ---
+
 
 # --- Main Application Class ---
 class BCFImporter:
@@ -194,3 +442,4 @@ if __name__ == "__main__":
         bcf_path="DesiteExportBcf_Pillar to big.bcf"
     )
     importer.run()
+'''
