@@ -1,3 +1,5 @@
+# Note, thses commands work on git bash
+
 # Authentication: 
 curl -i -X POST "http://91.99.113.101/Authentication/login" -H "Content-Type: application/json" -d "{\"userName\":\"fa_fa\",\"password\":\"Smaecs_BIM_2025\"}"
 
