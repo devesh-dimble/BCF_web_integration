@@ -3,6 +3,7 @@ import time
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, Response, send_file
 from flask import send_from_directory
+from flask_cors import CORS
 import jwt
 print(jwt.__version__)
 from datetime import datetime, timedelta
